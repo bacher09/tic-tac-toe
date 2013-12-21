@@ -47,6 +47,47 @@ function TicTacToeGame () {
         callback(who, x, y);
   }
 
+  this.win = function() {
+    var i, j, first, t;
+    // vertical check
+    for(i=0; i<3; i++) {
+      t = true;
+      first = field[i]; // (i, 0)
+      if(first === 0) continue;
+      for(j=1; j<3; j++) {
+        if(field[i+j*3] !== first) {
+          t = false;
+          break;
+        }
+      }
+      if(t) return {winner: first, type:"vertical", base: i, startCord: [i, 0], endCord: [i, j]}; 
+    }
+
+    // horizontal check
+    for(j=0; j<3; j++) {
+      t = true;
+      first = field[3*j]; // (0, j)
+      if(first === 0) continue;
+      for(i=1; i<3; i++) {
+        if(field[i+j*3] !== first) {
+          t = false;
+          break;
+        }
+      }
+      if(t) return {winner: first, type: "horizontal", base: j, startCord: [0, j], endCord: [i, j]};
+    }
+
+    // diagonal check
+    if(field[1+3] !== 0) {
+      // main diagonal
+      if((field[0] === field[1+3]) && (field[0] === field[2+2*3]))
+        return {winner: field[0], type: "diagonal", base: 0, startCord: [0, 0], endCord: [2, 2]};
+      // another diagonal
+      if((field[2] === field[1+3]) && (field[2] === field[0+2*3]))
+        return {winner: field[2], type: "diagonal", base: 1, startCord: [2, 0], endCord: [0, 2]};
+    }
+  }
+
   this.reset();
 }
 
@@ -135,10 +176,43 @@ function CanvasTicTacToe(dCanvas) {
           self.drawX(x, y);
         else
           self.drawO(x, y);
+
+        self.win();
       });
     } catch(e) {
       if(e.name !== "ArgumentError")
         throw e;
+    }
+  }
+
+  this.win = function() {
+    var wins, temp;
+    wins = tic_obj.win();
+    if(wins !== undefined) {
+      ctx.beginPath();
+      ctx.strokeStyle = "cyan";
+      ctx.lineCap = "round";
+      ctx.lineWidth = 5;
+      if(wins.type === "horizontal") {
+        temp = (wins.base + 0.5) * h_size + 0.5;
+        ctx.moveTo(0, temp);
+        ctx.lineTo(canvas.width, temp);
+      } else if (wins.type === "vertical") {
+        temp = (wins.base * 0.5) * w_size + 0.5;
+        ctx.moveTo(temp, 0);
+        ctx.lineTo(temp, canvas.height);
+      } else {
+        if(wins.base === 0) {
+          ctx.moveTo(0, 0);
+          ctx.lineTo(canvas.width, canvas.height);
+        } else {
+          ctx.moveTo(canvas.width, 0);
+          ctx.lineTo(0, canvas.height);
+        }
+      }
+
+      ctx.closePath();
+      ctx.stroke();
     }
   }
 
