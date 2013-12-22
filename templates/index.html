@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <title>Tic Tac Toe</title>
+    <link rel="stylesheet" href="{{ static_url('css/style.css') }}" />
     <script type="text/javascript" src="{{ static_url('js/tic_tac_toe.js') }}"></script>
 </head>
 <body>
+  <section class="game-controls">
+    <h1>Tic Tac Toe</h1>
     <canvas width="300" height="300" id="game"></canvas>
+    <button>Start Game!</button>
+  </section>
 </body>
 </html>
