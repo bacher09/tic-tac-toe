@@ -1,4 +1,5 @@
 from tornado.web import RequestHandler, Application
+from tornado.options import define, options, parse_command_line
 from tornado.websocket import WebSocketHandler
 import tornado.ioloop
 from collections import defaultdict
@@ -6,13 +7,15 @@ import time
 import os.path
 
 
+define("port", default=8888, help="run on the given port", type=int)
+define("debug", default=False, help="set tornado to debug mode", type=bool)
 ROOT_PATH = os.path.dirname(__file__)
 
 
 class MainHandler(RequestHandler):
 
     def get(self):
-        self.write("Hello world")
+        self.render("index.html")
 
 
 class RoomIsFull(Exception):
@@ -124,7 +127,7 @@ class MessageHandler(WebSocketHandler):
 
 class Application(Application):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         handlers = [
             (r"/", MainHandler),
             (r"/socket/(\d{1,9})", MessageHandler),
@@ -133,16 +136,18 @@ class Application(Application):
             template_path=os.path.join(ROOT_PATH, "templates"),
             static_path=os.path.join(ROOT_PATH, "static"),
             xsrf_cookies=True,
-            cookie_secret="11oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo=",
-            autoescape=True
+            cookie_secret="11oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2XdTP1o/Vo="
         )
+
+        settings.update(kwargs)
         self.game_connections = Connections()
         super(Application, self).__init__(handlers, **settings)
 
 
 def main():
-    application = Application()
-    application.listen(8888)
+    parse_command_line()
+    application = Application(debug=options.debug)
+    application.listen(options.port)
     tornado.ioloop.IOLoop.instance().start()
 
 
