@@ -1,15 +1,22 @@
 "use strict";
 
-function ArgumentError (message) {
+// exceptions
+function ArgumentError(message) {
   this.message = message;
   this.name = "ArgumentError";
 }
 
-function GameIsEnd (message) {
+function GameIsEnd(message) {
   this.message = message;
   this.name = "GameIsEnd";
 }
 
+function RoomIsFull(message) {
+  this.message = message;
+  this.name = "RoomIsFull";
+}
+
+// main code
 function TicTacToeGame () {
   var field, last_move, end_game, self;
   // 0 -- empty space, 1 - x, 2 - o
@@ -57,7 +64,7 @@ function TicTacToeGame () {
     if(typeof callback !== "undefined")
         callback(who, x, y);
 
-    self.win(wincallback);
+    this.win(wincallback);
   }
 
   function findWins() {
@@ -195,16 +202,19 @@ function CanvasTicTacToe(dCanvas) {
     ctx.stroke();
   }
 
-  this.move = function(who, x, y) {
+  this.move = function(who, x, y, mcallback, wcallback) {
     try {
       tic_obj.move(who, x, y, function(who, x, y) {
         if(who === 1)
           self.drawX(x, y);
         else
           self.drawO(x, y);
+
+        if(typeof mcallback !== "undefined") mcallback(who, x, y);
       }, function (wins) {
         drawWinLine(wins);
         // notify about the end of game
+        if(typeof wcallback !== "undefined") wcallback(wins);
       });
     } catch(e) {
       if(e.name !== "ArgumentError")
@@ -242,37 +252,123 @@ function CanvasTicTacToe(dCanvas) {
 
   this.gameIsEnd = tic_obj.gameIsEnd;
 
-  this.reset = function () {
+  this.reset = function() {
     // reset canvas
     canvas.width = canvas.width;
     tic_obj.reset();
   }
 
-  this.restart = function () {
-    self.reset();
-    self.init();
+  this.restart = function() {
+    this.reset();
+    this.init();
   }
 
   this.init();
 
-  function click(x, y) {
-    self.move(user_move, x, y);
+  this.click = function(x, y) {
+    this.move(user_move, x, y);
     if(user_move === 1)
       user_move = 2;
     else
       user_move = 1;
   }
 
+  this.paused = function() {
+    return this.gameIsEnd();
+  }
+
   function ticOnClick(e) {
     var cords, x, y;
     // ignore click's when game is end
-    if(tic_obj.gameIsEnd()) return;
+    if(self.paused()) return;
 
     cords = getClickCanvasCords(canvas, e);
     x = Math.floor(cords.x / w_size);
     y = Math.floor(cords.y / h_size);
-    click(x, y);
+    self.click(x, y);
   }
 
   dCanvas.addEventListener("click", ticOnClick, false);
+}
+
+function RemoteCanvasTicTacToe(room_id, dCanvas) {
+  var ws, SERVER_URL, player_type, is_wait, self;
+
+  self = this;
+  player_type = 0;
+  is_wait = true;
+  SERVER_URL = "ws://localhost:8888/socket/";
+
+  function buildUrl(room_id) {
+    return SERVER_URL + room_id;
+  }
+
+  // create web socket
+  ws = new WebSocket(buildUrl(room_id));
+  ws.onmessage = function(stream) {
+    var msg = JSON.parse(stream.data);
+    switch(msg.type) {
+      case "full":
+        throw new RoomIsFull("Sory this game already started");
+        break;
+      case "message":
+        // get chat message
+        break;
+      case "newplayer":
+        // new player connected
+        break;
+      case "gamestart":
+        self.start(msg.val);
+        break;
+      case "playerexit":
+        self.stop();
+        break;
+      case "move":
+        self.receiveMove(msg.x, msg.y);
+        break;
+    }
+  }
+  // inherit CanvasTicTacToe
+  CanvasTicTacToe.call(this, dCanvas);
+
+  this.start = function(p) {
+    player_type = p;
+    if(p === 1) is_wait = false;
+  }
+
+  this.otherPlayer = function() {
+    switch(player_type) {
+      case 1:
+        return 2;
+      case 2:
+        return 1;
+      default:
+        return 0;
+      }
+  }
+
+  this.receiveMove = function(x, y) {
+    this.move(self.otherPlayer(), x, y, function() {
+      is_wait = false;
+    });
+  }
+
+  this.userMove = function(x, y) {
+    this.move(player_type, x, y, function() {
+      ws.send(JSON.stringify({type: "move", x: x, y: y}));
+      is_wait = true;
+    });
+  }
+
+  this.stop = function() {
+    is_wait = true;
+  }
+
+  this.paused = function() {
+    return (player_type == 0) || this.gameIsEnd() || is_wait;
+  }
+
+  this.click = function(x, y) {
+    self.userMove(x, y);
+  }
 }

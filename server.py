@@ -33,6 +33,10 @@ class GamePair(object):
     def remove(self, con):
         self.connections.remove(con)
 
+    def broadcast(self, message):
+        for c in self.connections:
+            c.write_message(message)
+
     def communicate(self, con, message):
         if not self.full():
             return
@@ -46,6 +50,14 @@ class GamePair(object):
 
     def full(self):
         return len(self.connections) == 2
+
+    @property
+    def first(self):
+        return self.connections[0] if self.full() else None
+
+    @property
+    def second(self):
+        return self.connections[1] if self.full() else None
 
 
 class Connections(object):
@@ -63,6 +75,21 @@ class Connections(object):
         print("communicate")
         self.dct[con.id].communicate(con, message)
 
+    def __getitem__(self, item):
+        return self.dct[item]
+
+
+# server messages
+# type: full
+# type: newplayer
+# type: gamestart, val: whom
+# type: playerexit
+# type: message, val: message_text
+# type: move, x: x_cord, y: y_cord
+
+# client messages
+# type: message, val: message_text
+# type: move, x: x_cord, y: y_cord
 
 class MessageHandler(WebSocketHandler):
 
@@ -72,19 +99,22 @@ class MessageHandler(WebSocketHandler):
         try:
             self.game_connections.add_connection(self)
         except RoomIsFull:
-            print("exception")
-            self.write_message({"server": "full"})
+            self.write_message({"type": "full"})
             self.close()
         else:
-            self.game_connections.communicate(self, {"server": "connected"})
+            self.game_pair = self.game_connections[id]
+            self.game_pair.communicate(self, {"type": "newplayer"})
+            if self.game_pair.full():
+                print("game start")
+                self.game_pair.first.write_message({"type": "gamestart", "val": 1})
+                self.game_pair.second.write_message({"type": "gamestart", "val": 2})
 
     def on_message(self, message):
         # validate message
-        print(message)
         self.game_connections.communicate(self, message)
 
     def on_close(self):
-        self.game_connections.communicate(self, {"server": "closed"})
+        self.game_connections.communicate(self, {"type": "playerexit"})
         self.game_connections.remove_connection(self)
 
     @property
