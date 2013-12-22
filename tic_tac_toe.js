@@ -223,7 +223,7 @@ function CanvasTicTacToe(dCanvas) {
       ctx.moveTo(0, temp);
       ctx.lineTo(canvas.width, temp);
     } else if (wins.type === "vertical") {
-      temp = (wins.base * 0.5) * w_size + 0.5;
+      temp = (wins.base + 0.5) * w_size + 0.5;
       ctx.moveTo(temp, 0);
       ctx.lineTo(temp, canvas.height);
     } else {
