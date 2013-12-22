@@ -5,9 +5,16 @@ function ArgumentError (message) {
   this.name = "ArgumentError";
 }
 
+function GameIsEnd (message) {
+  this.message = message;
+  this.name = "GameIsEnd";
+}
+
 function TicTacToeGame () {
-  var field, last_move;
+  var field, last_move, end_game, self;
   // 0 -- empty space, 1 - x, 2 - o
+
+  self = this;
 
   this.reset = function() {
     field = [0, 0, 0,
@@ -15,13 +22,17 @@ function TicTacToeGame () {
              0, 0, 0];
 
     last_move = 0;
+    end_game = false;
   }
 
   this.getField = function() {
       return field;
   }
 
-  this.move = function(who, x, y, callback) {
+  this.move = function(who, x, y, callback, wincallback) {
+    if(end_game)
+      throw new GameIsEnd("Game compleate");
+
     if(who != 1 && who != 2)
         throw new ArgumentError("Bad who value");
 
@@ -45,9 +56,11 @@ function TicTacToeGame () {
     last_move = who;
     if(typeof callback !== "undefined")
         callback(who, x, y);
+
+    self.win(wincallback);
   }
 
-  this.win = function() {
+  function findWins() {
     var i, j, first, t;
     // vertical check
     for(i=0; i<3; i++) {
@@ -86,6 +99,19 @@ function TicTacToeGame () {
       if((field[2] === field[1+3]) && (field[2] === field[0+2*3]))
         return {winner: field[2], type: "diagonal", base: 1, startCord: [2, 0], endCord: [0, 2]};
     }
+  }
+
+  this.win = function(callback) {
+    var wins;
+    wins = findWins();
+    if(wins !== undefined) {
+      end_game = true;
+      if(typeof callback !== "undefined") callback(wins);
+    }
+  }
+
+  this.gameIsEnd = function() {
+    return end_game;
   }
 
   this.reset();
@@ -176,8 +202,9 @@ function CanvasTicTacToe(dCanvas) {
           self.drawX(x, y);
         else
           self.drawO(x, y);
-
-        self.win();
+      }, function (wins) {
+        drawWinLine(wins);
+        // notify about the end of game
       });
     } catch(e) {
       if(e.name !== "ArgumentError")
@@ -185,41 +212,45 @@ function CanvasTicTacToe(dCanvas) {
     }
   }
 
-  this.win = function() {
-    var wins, temp;
-    wins = tic_obj.win();
-    if(wins !== undefined) {
-      ctx.beginPath();
-      ctx.strokeStyle = "cyan";
-      ctx.lineCap = "round";
-      ctx.lineWidth = 5;
-      if(wins.type === "horizontal") {
-        temp = (wins.base + 0.5) * h_size + 0.5;
-        ctx.moveTo(0, temp);
-        ctx.lineTo(canvas.width, temp);
-      } else if (wins.type === "vertical") {
-        temp = (wins.base * 0.5) * w_size + 0.5;
-        ctx.moveTo(temp, 0);
-        ctx.lineTo(temp, canvas.height);
+  function drawWinLine(wins) {
+    var temp;
+    ctx.beginPath();
+    ctx.strokeStyle = "cyan";
+    ctx.lineCap = "round";
+    ctx.lineWidth = 5;
+    if(wins.type === "horizontal") {
+      temp = (wins.base + 0.5) * h_size + 0.5;
+      ctx.moveTo(0, temp);
+      ctx.lineTo(canvas.width, temp);
+    } else if (wins.type === "vertical") {
+      temp = (wins.base * 0.5) * w_size + 0.5;
+      ctx.moveTo(temp, 0);
+      ctx.lineTo(temp, canvas.height);
+    } else {
+      if(wins.base === 0) {
+        ctx.moveTo(0, 0);
+        ctx.lineTo(canvas.width, canvas.height);
       } else {
-        if(wins.base === 0) {
-          ctx.moveTo(0, 0);
-          ctx.lineTo(canvas.width, canvas.height);
-        } else {
-          ctx.moveTo(canvas.width, 0);
-          ctx.lineTo(0, canvas.height);
-        }
+        ctx.moveTo(canvas.width, 0);
+        ctx.lineTo(0, canvas.height);
       }
-
-      ctx.closePath();
-      ctx.stroke();
     }
+
+    ctx.closePath();
+    ctx.stroke();
   }
+
+  this.gameIsEnd = tic_obj.gameIsEnd;
 
   this.reset = function () {
     // reset canvas
     canvas.width = canvas.width;
     tic_obj.reset();
+  }
+
+  this.restart = function () {
+    self.reset();
+    self.init();
   }
 
   this.init();
@@ -234,6 +265,9 @@ function CanvasTicTacToe(dCanvas) {
 
   function ticOnClick(e) {
     var cords, x, y;
+    // ignore click's when game is end
+    if(tic_obj.gameIsEnd()) return;
+
     cords = getClickCanvasCords(canvas, e);
     x = Math.floor(cords.x / w_size);
     y = Math.floor(cords.y / h_size);
