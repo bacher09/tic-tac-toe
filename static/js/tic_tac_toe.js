@@ -173,14 +173,17 @@ function CanvasTicTacToe(dCanvas) {
   }
 
   this.drawX = function(x, y) {
-    var x1, y1, x2, y2;
-    x1 = w_size * x;
-    y1 = h_size * y;
-    x2 = x1 + w_size;
-    y2 = y1 + h_size;
+    var x1, y1, x2, y2, temp1, temp2;
+    temp1 = w_size/12;
+    temp2 = h_size/12;
+    x1 = w_size * x + temp1;
+    y1 = h_size * y + temp2;
+    x2 = x1 + w_size - 2*temp1;
+    y2 = y1 + h_size - 2*temp2;
     ctx.beginPath();
     ctx.strokeStyle = "black";
-    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineWidth = 8;
     // line first
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
@@ -188,16 +191,17 @@ function CanvasTicTacToe(dCanvas) {
     // line second
     ctx.moveTo(x2, y1);
     ctx.lineTo(x1, y2);
-    ctx.closePath();
     ctx.stroke();
+    ctx.closePath();
   }
 
   this.drawO = function(x, y) {
     var min_size = Math.min(w_size, h_size);
     ctx.beginPath();
     ctx.strokeStyle = "red";
-    ctx.lineWidth = 2;
-    ctx.arc(w_size * x + w_size/2, h_size * y + h_size/2, min_size/2 - min_size/10, 0, 2*Math.PI);
+    //ctx.strokeStyle = "#444";
+    ctx.lineWidth = 8;
+    ctx.arc(w_size * x + w_size/2, h_size * y + h_size/2, min_size/2 - min_size/12, 0, 2*Math.PI);
     ctx.closePath();
     ctx.stroke();
   }
