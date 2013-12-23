@@ -87,21 +87,8 @@ function TicTacToeGame () {
     }
   }
 
-  this.randFreeItem = function() {
-    var free_cells, rand_num, n, cord, i, j;
-    free_cells = self.getFreeCellCount();
-    if(free_cells === 0) return;
-    free_cells--;
-    n = 0;
-    rand_num = Math.round(Math.random() * free_cells);
-    for(i=0; i < 3; i++){
-      for(j=0; j < 3; j++) {
-        if(field[j*3 + i] === 0) {
-          if(n === rand_num) return {x: i, y: j};
-          n++;
-        }
-      }
-    }
+  this.item = function(x, y) {
+    return field[y*3 + x];
   }
 
   function findWins() {
@@ -365,21 +352,68 @@ function SelfPlayController(view) {
 }
 
 function ComputerPlayController(view) {
-  var obj, user_type, tic_obj;
+  var obj, user_type, bot_type, tic_obj;
   obj = {};
   tic_obj = new TicTacToeGame();
 
   obj.start = function() {
     obj.chooseUser();
+    if(user_type === 2) obj.botMove();
+    view.clickEnable();
+  }
+
+  obj.restart = function() {
+    tic_obj.reset();
+    view.reinit();
+    obj.start();
   }
 
   obj.chooseUser = function() {
     user_type = Math.round(Math.random()) + 1;
+    bot_type = tic_obj.anotherUser(user_type);
   }
 
-  obj.botMove = function() {
+  obj.makeMove = function(who, x, y){
+    tic_obj.move(who, x, y, function(who, x, y){
+      view.drawMove(who, x, y)
+    }, function(wins) {
+      view.clickDisable();
+      view.drawWinner(wins);
+    });
   }
 
+  obj.randFreeItem = function() {
+    var free_cells, rand_num, n, cord, i, j;
+    free_cells = tic_obj.getFreeCellCount();
+    if(free_cells === 0) return;
+    free_cells--;
+    n = 0;
+    rand_num = Math.round(Math.random() * free_cells);
+    for(i=0; i < 3; i++){
+      for(j=0; j < 3; j++) {
+        if(tic_obj.item(i, j) === 0) {
+          if(n === rand_num) return {x: i, y: j};
+          n++;
+        }
+      }
+    }
+  }
+
+  obj.botMove = function(){
+    var cord;
+    cord = obj.randFreeItem();
+    if(cord !== undefined) obj.makeMove(bot_type, cord.x, cord.y);
+  }
+
+  obj.clickHandler = function(x, y) {
+    if(!tic_obj.freeCell(x, y)) return;
+    obj.makeMove(user_type, x, y);
+    if(!tic_obj.gameIsEnd()) obj.botMove();
+  }
+
+  view.onclick = obj.clickHandler;
+
+  return obj;
 }
 
 function RemoteCanvasTicTacToe(room_id, dCanvas) {
