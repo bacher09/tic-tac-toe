@@ -18,17 +18,19 @@ function RoomIsFull(message) {
 
 // main code
 function TicTacToeGame () {
-  var field, last_move, end_game, self;
+  var field, user_move, end_game, move_count, CELL_COUNT, self;
   // 0 -- empty space, 1 - x, 2 - o
 
   self = this;
+  CELL_COUNT = 9;
 
   this.reset = function() {
     field = [0, 0, 0,
              0, 0, 0,
              0, 0, 0];
 
-    last_move = 0;
+    user_move = 1;
+    move_count = 0;
     end_game = false;
   }
 
@@ -43,11 +45,8 @@ function TicTacToeGame () {
     if(who != 1 && who != 2)
         throw new ArgumentError("Bad who value");
 
-    if(last_move == who)
-        throw new ArgumentError("Player has already made the move");
-
-    if(last_move === 0 && who === 2)
-        throw new ArgumentError("First move should by done by x");
+    if(user_move !== who)
+        throw new ArgumentError("Bad Player move");
 
     if(x < 0 || x > 2)
         throw new ArgumentError("Bad x value");
@@ -60,15 +59,49 @@ function TicTacToeGame () {
     else
         throw new ArgumentError("This move already done");
 
-    last_move = who;
+    user_move = self.nextUser();
+    move_count++;
     if(typeof callback !== "undefined")
         callback(who, x, y);
 
     this.win(wincallback);
   }
 
+  this.getMoveCount = function() {
+    return move_count;
+  }
+
   this.freeCell = function(x, y) {
     return field[y*3 + x] === 0;
+  }
+
+  this.getFreeCellCount = function() {
+    return CELL_COUNT - self.getMoveCount();
+  }
+
+  this.forEachItem = function(callback) {
+    for(var i=0; i < 3; i++){
+      for(var j=0; j < 3; j++) {
+        callback(i, j, field[3*j + i]);
+      }
+    }
+  }
+
+  this.randFreeItem = function() {
+    var free_cells, rand_num, n, cord, i, j;
+    free_cells = self.getFreeCellCount();
+    if(free_cells === 0) return;
+    free_cells--;
+    n = 0;
+    rand_num = Math.round(Math.random() * free_cells);
+    for(i=0; i < 3; i++){
+      for(j=0; j < 3; j++) {
+        if(field[j*3 + i] === 0) {
+          if(n === rand_num) return {x: i, y: j};
+          n++;
+        }
+      }
+    }
   }
 
   function findWins() {
@@ -123,6 +156,23 @@ function TicTacToeGame () {
 
   this.gameIsEnd = function() {
     return end_game;
+  }
+
+  this.anotherUser = function(who) {
+    if(who === 1)
+      return 2;
+    else if(who === 2)
+      return 1;
+    else
+      throw new ArgumentError("Bad who parameter");
+  }
+
+  this.nextUser = function() {
+    return self.anotherUser(user_move);
+  }
+
+  this.curUser = function() {
+    return user_move;
   }
 
   this.reset();
@@ -217,6 +267,15 @@ function TicView(dCanvas) {
     ctx.closePath();
   }
 
+  this.drawMove = function(who, x, y) {
+    if(who === 1)
+      self.drawX(x, y);
+    else if(who === 2)
+      self.drawO(x, y);
+    else
+      throw new ArgumentError("Bad who param");
+  }
+
   this.drawWinner = function(wins) {
     var temp;
     ctx.beginPath();
@@ -275,10 +334,9 @@ function TicView(dCanvas) {
 }
 
 function SelfPlayController(view) {
-  var tic_obj, user_move, obj;
+  var tic_obj, obj;
   obj = {};
   tic_obj = new TicTacToeGame();
-  user_move = 1;
 
   obj.start = function() {
     view.clickEnable();
@@ -286,35 +344,42 @@ function SelfPlayController(view) {
 
   obj.restart = function() {
     tic_obj.reset();
-    user_move = 1;
     view.reinit();
     obj.start();
   }
 
-  view.onclick = function(x, y){
+  obj.clickHandler = function(x, y){
     if(!tic_obj.freeCell(x, y)) return;
 
-    tic_obj.move(user_move, x, y, function(who, x, y) {
-      if(who === 1)
-        view.drawX(x, y);
-      else
-        view.drawO(x, y);
-
-      changeUser();
+    tic_obj.move(tic_obj.curUser(), x, y, function(who, x, y) {
+      view.drawMove(who, x, y);
     }, function(wins) {
       view.clickDisable();
       view.drawWinner(wins);
     });
   }
 
-  function changeUser() {
-    if(user_move === 1)
-      user_move = 2;
-    else
-      user_move = 1;
-  }
+  view.onclick = obj.clickHandler;
 
   return obj;
+}
+
+function ComputerPlayController(view) {
+  var obj, user_type, tic_obj;
+  obj = {};
+  tic_obj = new TicTacToeGame();
+
+  obj.start = function() {
+    obj.chooseUser();
+  }
+
+  obj.chooseUser = function() {
+    user_type = Math.round(Math.random()) + 1;
+  }
+
+  obj.botMove = function() {
+  }
+
 }
 
 function RemoteCanvasTicTacToe(room_id, dCanvas) {
