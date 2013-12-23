@@ -55,7 +55,7 @@ function TicTacToeGame () {
     if(y < 0 || y > 2)
         throw new ArgumentError("Bad y value");
 
-    if(field[y*3 + x] === 0)
+    if(self.freeCell(x, y))
       field[y*3 + x] = who;
     else
         throw new ArgumentError("This move already done");
@@ -65,6 +65,10 @@ function TicTacToeGame () {
         callback(who, x, y);
 
     this.win(wincallback);
+  }
+
+  this.freeCell = function(x, y) {
+    return field[y*3 + x] === 0;
   }
 
   function findWins() {
@@ -138,23 +142,24 @@ function getClickCanvasCords(canvas, e) {
   return {x: x, y: y};
 }
 
-function CanvasTicTacToe(dCanvas) {
-  var ctx, canvas, w_size, h_size, tic_obj, self;
-  self = this;
-  var user_move;
+function TicView(dCanvas) {
+  var ctx, canvas, w_size, h_size, click_disabled, self;
 
-  user_move = 1;
-  
+  self = this;
+  click_disabled = true;
   canvas = dCanvas;
   ctx = dCanvas.getContext("2d");
-  tic_obj = new TicTacToeGame();
+  this.onclick = undefined;
+
+  this.clear = function() {
+    canvas.width = canvas.width;
+  }
 
   this.init = function() {
-    this.reset();
-
     w_size = canvas.width / 3;
     h_size = canvas.height / 3;
 
+    ctx.beginPath();
     // 2 vertical lines
     ctx.moveTo(w_size + 0.5, 0)
     ctx.lineTo(w_size + 0.5, canvas.height)
@@ -170,6 +175,12 @@ function CanvasTicTacToe(dCanvas) {
     ctx.lineTo(canvas.width, 2*h_size + 0.5)
 
     ctx.stroke();
+    ctx.closePath();
+  }
+
+  this.reinit = function() {
+    this.clear();
+    this.init();
   }
 
   this.drawX = function(x, y) {
@@ -202,31 +213,11 @@ function CanvasTicTacToe(dCanvas) {
     //ctx.strokeStyle = "#444";
     ctx.lineWidth = 8;
     ctx.arc(w_size * x + w_size/2, h_size * y + h_size/2, min_size/2 - min_size/12, 0, 2*Math.PI);
-    ctx.closePath();
     ctx.stroke();
+    ctx.closePath();
   }
 
-  this.move = function(who, x, y, mcallback, wcallback) {
-    try {
-      tic_obj.move(who, x, y, function(who, x, y) {
-        if(who === 1)
-          self.drawX(x, y);
-        else
-          self.drawO(x, y);
-
-        if(typeof mcallback !== "undefined") mcallback(who, x, y);
-      }, function (wins) {
-        drawWinLine(wins);
-        // notify about the end of game
-        if(typeof wcallback !== "undefined") wcallback(wins);
-      });
-    } catch(e) {
-      if(e.name !== "ArgumentError")
-        throw e;
-    }
-  }
-
-  function drawWinLine(wins) {
+  this.drawWinner = function(wins) {
     var temp;
     ctx.beginPath();
     ctx.strokeStyle = "cyan";
@@ -250,49 +241,80 @@ function CanvasTicTacToe(dCanvas) {
       }
     }
 
-    ctx.closePath();
     ctx.stroke();
+    ctx.closePath();
   }
 
-  this.gameIsEnd = tic_obj.gameIsEnd;
-
-  this.reset = function() {
-    // reset canvas
-    canvas.width = canvas.width;
-    tic_obj.reset();
+  this.clickPaused = function() {
+    return click_disabled;
   }
 
-  this.restart = function() {
-    this.reset();
-    this.init();
+  this.clickEnable = function() {
+    click_disabled = false;
   }
+
+  this.clickDisable = function() {
+    click_disabled = true;
+  }
+
+  function onClick(e) {
+    var cords, x, y;
+    if(self.clickPaused() || (typeof self.onclick === "undefined"))
+      return;
+
+    cords = getClickCanvasCords(canvas, e);
+    x = Math.floor(cords.x / w_size);
+    y = Math.floor(cords.y / h_size);
+    self.onclick(x, y);
+  }
+
+  dCanvas.addEventListener("click", onClick, false);
 
   this.init();
 
-  this.click = function(x, y) {
-    this.move(user_move, x, y);
+}
+
+function SelfPlayController(view) {
+  var tic_obj, user_move, obj;
+  obj = {};
+  tic_obj = new TicTacToeGame();
+  user_move = 1;
+
+  obj.start = function() {
+    view.clickEnable();
+  }
+
+  obj.restart = function() {
+    tic_obj.reset();
+    user_move = 1;
+    view.reinit();
+    obj.start();
+  }
+
+  view.onclick = function(x, y){
+    if(!tic_obj.freeCell(x, y)) return;
+
+    tic_obj.move(user_move, x, y, function(who, x, y) {
+      if(who === 1)
+        view.drawX(x, y);
+      else
+        view.drawO(x, y);
+
+      changeUser();
+    }, function(wins) {
+      view.clickDisable();
+      view.drawWinner(wins);
+    });
+  }
+
+  function changeUser() {
     if(user_move === 1)
       user_move = 2;
     else
       user_move = 1;
   }
 
-  this.paused = function() {
-    return this.gameIsEnd();
-  }
-
-  function ticOnClick(e) {
-    var cords, x, y;
-    // ignore click's when game is end
-    if(self.paused()) return;
-
-    cords = getClickCanvasCords(canvas, e);
-    x = Math.floor(cords.x / w_size);
-    y = Math.floor(cords.y / h_size);
-    self.click(x, y);
-  }
-
-  dCanvas.addEventListener("click", ticOnClick, false);
+  return obj;
 }
 
 function RemoteCanvasTicTacToe(room_id, dCanvas) {
