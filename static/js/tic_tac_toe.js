@@ -501,3 +501,18 @@ function RemoteCanvasTicTacToe(room_id, dCanvas) {
     self.userMove(x, y);
   }
 }
+
+// base start game
+(function() {
+  console.log("Add");
+  window.addEventListener("load", function() {
+    var view, control;
+    console.log("Second");
+    view = new TicView(document.getElementById("game"));
+    control = ComputerPlayController(view);
+    document.querySelector("section.game-controls > button").
+      addEventListener("click", function() {
+        control.restart();
+      }, false)
+  }, false)
+})();
