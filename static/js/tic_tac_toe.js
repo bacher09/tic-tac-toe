@@ -19,7 +19,6 @@ function RoomIsFull(message) {
 // main code
 function TicTacToeGame () {
   var field, user_move, end_game, move_count, CELL_COUNT, self;
-  // 0 -- empty space, 1 - x, 2 - o
 
   self = this;
   CELL_COUNT = 9;
@@ -29,7 +28,7 @@ function TicTacToeGame () {
              0, 0, 0,
              0, 0, 0];
 
-    user_move = 1;
+    user_move = TicTacToeGame.USER_X;
     move_count = 0;
     end_game = false;
   }
@@ -42,7 +41,7 @@ function TicTacToeGame () {
     if(end_game)
       throw new GameIsEnd("Game compleate");
 
-    if(who != 1 && who != 2)
+    if(who != TicTacToeGame.USER_X && who != TicTacToeGame.USER_O)
         throw new ArgumentError("Bad who value");
 
     if(user_move !== who)
@@ -146,10 +145,10 @@ function TicTacToeGame () {
   }
 
   this.anotherUser = function(who) {
-    if(who === 1)
-      return 2;
-    else if(who === 2)
-      return 1;
+    if(who === TicTacToeGame.USER_X)
+      return TicTacToeGame.USER_O;
+    else if(who === TicTacToeGame.USER_O)
+      return TicTacToeGame.USER_X;
     else
       throw new ArgumentError("Bad who parameter");
   }
@@ -164,6 +163,11 @@ function TicTacToeGame () {
 
   this.reset();
 }
+
+// 0 -- empty space, 1 - x, 2 - o
+TicTacToeGame.USER_X = 1;
+TicTacToeGame.USER_O = 2;
+
 
 function getClickCanvasCords(canvas, e) {
   var x, y;
@@ -255,9 +259,9 @@ function TicView(dCanvas) {
   }
 
   this.drawMove = function(who, x, y) {
-    if(who === 1)
+    if(who === TicTacToeGame.USER_X)
       self.drawX(x, y);
-    else if(who === 2)
+    else if(who === TicTacToeGame.USER_O)
       self.drawO(x, y);
     else
       throw new ArgumentError("Bad who param");
@@ -358,7 +362,7 @@ function ComputerPlayController(view) {
 
   obj.start = function() {
     obj.chooseUser();
-    if(user_type === 2) obj.botMove();
+    if(user_type === TicTacToeGame.USER_O) obj.botMove();
     view.clickEnable();
   }
 
