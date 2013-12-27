@@ -33,8 +33,25 @@ function TicTacToeGame () {
     end_game = false;
   }
 
+  this.toJSON = function() {
+    return JSON.stringify({field: field, user_move: user_move, move_count: move_count, end_game: end_game});
+  }
+
+  this.fromJSON = function(data) {
+    var parsed_data;
+    parsed_data = JSON.parse(data);
+    user_move = parsed_data.user_move;
+    move_count = parsed_data.move_count;
+    end_game = parsed_data.end_game;
+    field = parsed_data.field;
+  }
+
   this.getField = function() {
       return field;
+  }
+
+  this.saveToStorage = function() {
+    window.localStorage.setItem(TicTacToeGame.STORAGE_KEY, self.toJSON())
   }
 
   this.move = function(who, x, y, callback, wincallback) {
@@ -167,6 +184,16 @@ function TicTacToeGame () {
 // 0 -- empty space, 1 - x, 2 - o
 TicTacToeGame.USER_X = 1;
 TicTacToeGame.USER_O = 2;
+TicTacToeGame.STORAGE_KEY = "tic-tac-toe-data";
+
+TicTacToeGame.loadFromStorage = function() {
+  var obj;
+  if(TicTacToeGame.STORAGE_KEY in window.localStorage) {
+    obj = new TicTacToeGame();
+    obj.fromJSON(window.localStorage[TicTacToeGame.STORAGE_KEY]);
+    return obj;
+  }
+}
 
 
 function getClickCanvasCords(canvas, e) {
