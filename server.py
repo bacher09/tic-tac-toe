@@ -3,7 +3,7 @@ from tornado.options import define, options, parse_command_line
 from tornado.websocket import WebSocketHandler
 import tornado.ioloop
 from collections import defaultdict
-import time
+import json
 import os.path
 
 
@@ -22,107 +22,183 @@ class RoomIsFull(Exception):
     pass
 
 
-class GamePair(object):
+class Room(object):
+
+    X_USER = 1
+    O_USER = 2
 
     def __init__(self):
         self.connections = []
 
+    def __len__(self):
+        return len(self.connections)
+
     def add(self, con):
-        if len(self.connections) < 2:
+        if len(self) < 2:
             self.connections.append(con)
         else:
-            raise RoomIsFull()
-
-    def remove(self, con):
-        self.connections.remove(con)
+            raise RoomIsFull("")
 
     def broadcast(self, message):
         for c in self.connections:
             c.write_message(message)
 
-    def communicate(self, con, message):
-        if not self.full():
-            return
-
+    def comunicate(self, con):
         for c in self.connections:
             if c != con:
                 c.write_message(message)
 
-    def __len__(self):
-        return len(self.connections)
+    def other(self, con):
+        if not self.full:
+            raise ValueError("Other not exists")
 
+        for c in self.connections:
+            if c != con:
+                return c
+
+    def game_start(self):
+        if not self.full:
+            raise ValueError("Room is not full")
+
+        f_type = self.random_choice()
+        s_type = self.another_user(f_type)
+        self.first.send_gamestart(f_type)
+        self.second.send_gamestart(s_type)
+
+
+    @staticmethod
+    def random_choice():
+        import random
+        return random.randrange(1, 3)
+
+    @classmethod
+    def another_user(cls, user_type):
+        if user_type == cls.X_USER:
+            return cls.O_USER 
+        elif user_type == cls.O_USER:
+            return cls.X_USER
+        else:
+            raise ValueError("Bad user type")
+
+    @property
     def full(self):
-        return len(self.connections) == 2
+        return len(self) == 2
 
     @property
     def first(self):
-        return self.connections[0] if self.full() else None
+        return self.connections[0] if self.full else None
 
     @property
     def second(self):
-        return self.connections[1] if self.full() else None
+        return self.connections[1] if self.full else None
 
 
-class Connections(object):
+class GameService(object):
 
     def __init__(self):
-        self.dct = defaultdict(GamePair)
+        self.rooms = {}
 
-    def add_connection(self, con):
-        self.dct[con.id].add(con)
+    def __getitem__(self, key):
+        return self.rooms[key]
 
-    def remove_connection(self, con):
-        self.dct[con.id].remove(con)
+    def get(self, key, default=None):
+        return self.rooms.get(key, default)
 
-    def communicate(self, con, message):
-        print("communicate")
-        self.dct[con.id].communicate(con, message)
+    def join_room(self, con, room_id):
+        room = self.rooms.get(room_id)
+        if room is None:
+            room = Room()
+            self.rooms[room_id] = room
 
-    def __getitem__(self, item):
-        return self.dct[item]
+        try:
+            room.add(con)
+        except RoomIsFull:
+            con.send_full()
+        else:
+            con.on_roomjoined(room_id)
+            if room.full:
+                room.game_start()
+            else:
+                con.send_wait()
+
+    def close_room(self, con, room_id):
+        room = self.rooms.get(room_id)
+        if room is None:
+            return
+
+        if room.full:
+            room.other(con).send_end()
+        del self.rooms[room_id]
 
 
 # server messages
 # type: full
-# type: newplayer
+# type: joined, id: room_id
+# type: wait
+# type: end
 # type: gamestart, val: whom
-# type: playerexit
-# type: message, val: message_text
 # type: move, x: x_cord, y: y_cord
 
 # client messages
-# type: message, val: message_text
+# type: joinany
+# type: joinroom, id: room_id
 # type: move, x: x_cord, y: y_cord
 
 class MessageHandler(WebSocketHandler):
+    
+    room_id = None
 
-    def open(self, id):
-        self.id = id
-        print("open %s" % id)
-        try:
-            self.game_connections.add_connection(self)
-        except RoomIsFull:
-            self.write_message({"type": "full"})
-            self.close()
-        else:
-            self.game_pair = self.game_connections[id]
-            self.game_pair.communicate(self, {"type": "newplayer"})
-            if self.game_pair.full():
-                print("game start")
-                self.game_pair.first.write_message({"type": "gamestart", "val": 1})
-                self.game_pair.second.write_message({"type": "gamestart", "val": 2})
+    def open(self):
+        pass
 
     def on_message(self, message):
-        # validate message
-        self.game_connections.communicate(self, message)
+        message_json = json.loads(message)
+        # TODO: validate schema
+
+        print(message)
+        type_m = message_json.get("type")
+        if type_m == "joinroom":
+            self.on_roomexit()
+            self.games.join_room(self, message_json["id"])
+        elif type_m == "move":
+            if self.room is None:
+                # game not start
+                return
+
+    def on_roomexit(self):
+        if self.room is not None:
+            self.games.close_room(self, self.room_id)
+            
 
     def on_close(self):
-        self.game_connections.communicate(self, {"type": "playerexit"})
-        self.game_connections.remove_connection(self)
+        self.on_roomexit()
+
+    def on_roomjoined(self, room_id):
+        self.room_id = room_id
+        self.send_joined(room_id)
+
+    def send_gamestart(self, val):
+        self.write_message({"type": "gamestart", "val": val})
+
+    def send_full(self):
+        self.write_message({"type": "full"})
+
+    def send_wait(self):
+        self.write_message({"type": "wait"})
+
+    def send_joined(self, room_id):
+        self.write_message({"type": "joined", "id": room_id})
+
+    def send_end(self, con):
+        self.write_message({"type": "end"})
 
     @property
-    def game_connections(self):
-        return self.application.game_connections
+    def games(self):
+        return self.application.game_service
+
+    @property
+    def room(self):
+        return None if self.room_id is None else self.games.get(self.room_id)
 
 
 class Application(Application):
@@ -130,7 +206,7 @@ class Application(Application):
     def __init__(self, **kwargs):
         handlers = [
             (r"/", MainHandler),
-            (r"/socket/(\d{1,9})", MessageHandler),
+            (r"/socket", MessageHandler),
         ]
         settings = dict(
             template_path=os.path.join(ROOT_PATH, "templates"),
@@ -140,7 +216,7 @@ class Application(Application):
         )
 
         settings.update(kwargs)
-        self.game_connections = Connections()
+        self.game_service = GameService()
         super(Application, self).__init__(handlers, **settings)
 
 
