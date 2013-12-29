@@ -4,6 +4,7 @@ from tornado.websocket import WebSocketHandler
 import tornado.ioloop
 from collections import defaultdict
 import json
+import jsonschema
 import random
 import os.path
 
@@ -11,6 +12,67 @@ import os.path
 define("port", default=8888, help="run on the given port", type=int)
 define("debug", default=False, help="set tornado to debug mode", type=bool)
 ROOT_PATH = os.path.dirname(__file__)
+MESSAGES_SCHEMA = {
+    "id": "#message",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "Messages schema",
+    "type": "object",
+    "oneOf": [
+        {"$ref": "#/definitions/joinany"},
+        {"$ref": "#/definitions/joinroom"},
+        {"$ref": "#/definitions/move"}
+    ],
+    "definitions": {
+        "joinany": {
+            "properties": {
+                "type": { "enum": ["joinany"]}
+            },
+            "additionalProperties": False
+        },
+        "joinroom": {
+            "properties": {
+                "type": { "enum": ["joinroom"]},
+                "id": {
+                    "type": "string",
+                    "pattern": "^[1-9]\d*$"
+                }
+            },
+            "required": ["id"],
+            "additionalProperties": False
+        },
+        "move": {
+            "properties": {
+                "type": { "enum": ["move"]},
+                "x": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 2,
+                },
+                "y": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 2,
+                }
+            },
+            "required": ["x", "y"],
+            "additionalProperties": False
+        }
+    },
+    "required": ["type"]
+}
+
+
+json_validator = jsonschema.Draft4Validator(MESSAGES_SCHEMA)
+
+
+def parse_message(message):
+    try:
+        message_json = json.loads(message)
+    except ValueError:
+        return
+    else:
+        if json_validator.is_valid(message_json):
+            return message_json
 
 
 class MainHandler(RequestHandler):
@@ -171,14 +233,15 @@ class MessageHandler(WebSocketHandler):
         pass
 
     def on_message(self, message):
-        message_json = json.loads(message)
-        # TODO: validate schema
+        message_json = parse_message(message)
+        if message_json is None:
+            return
 
         print(message)
         type_m = message_json.get("type")
         if type_m == "joinroom":
             self.on_roomexit()
-            self.games.join_room(self, message_json["id"])
+            self.games.join_room(self, int(message_json["id"]))
         elif type_m == "joinany":
             self.on_roomexit()
             self.games.join_any(self)
@@ -209,7 +272,7 @@ class MessageHandler(WebSocketHandler):
         self.write_message({"type": "wait"})
 
     def send_joined(self, room_id):
-        self.write_message({"type": "joined", "id": room_id})
+        self.write_message({"type": "joined", "id": str(room_id)})
 
     def send_end(self):
         self.write_message({"type": "end"})
