@@ -4,6 +4,7 @@ from tornado.websocket import WebSocketHandler
 import tornado.ioloop
 from collections import defaultdict
 import json
+import random
 import os.path
 
 
@@ -65,10 +66,8 @@ class Room(object):
         self.first.send_gamestart(f_type)
         self.second.send_gamestart(s_type)
 
-
     @staticmethod
     def random_choice():
-        import random
         return random.randrange(1, 3)
 
     @classmethod
@@ -97,6 +96,7 @@ class GameService(object):
 
     def __init__(self):
         self.rooms = {}
+        self.waiting = set()
 
     def __getitem__(self, key):
         return self.rooms[key]
@@ -117,9 +117,24 @@ class GameService(object):
         else:
             con.on_roomjoined(room_id)
             if room.full:
+                self.waiting.remove(room_id) # For joinany
                 room.game_start()
             else:
+                self.waiting.add(room_id) # for joinany
                 con.send_wait()
+
+    def random_waiting(self):
+        return random.choice(tuple(self.waiting))
+
+    def random_room(self):
+        import sys
+        return random.randrange(1, sys.maxint)
+
+    def join_any(self, con):
+        room_id = self.random_waiting() if self.is_waiting else \
+                  self.random_room()
+
+        self.join_room(con, room_id)
 
     def close_room(self, con, room_id):
         room = self.rooms.get(room_id)
@@ -129,6 +144,10 @@ class GameService(object):
         if room.full:
             room.other(con).send_end()
         del self.rooms[room_id]
+
+    @property
+    def is_waiting(self):
+        return len(self.waiting) > 0
 
 
 # server messages
@@ -160,6 +179,9 @@ class MessageHandler(WebSocketHandler):
         if type_m == "joinroom":
             self.on_roomexit()
             self.games.join_room(self, message_json["id"])
+        elif type_m == "joinany":
+            self.on_roomexit()
+            self.games.join_any(self)
         elif type_m == "move":
             if self.room is None:
                 # game not start
@@ -169,7 +191,6 @@ class MessageHandler(WebSocketHandler):
         if self.room is not None:
             self.games.close_room(self, self.room_id)
             
-
     def on_close(self):
         self.on_roomexit()
 
