@@ -450,10 +450,15 @@ function ComputerPlayController(view) {
 function RemotePlayController(view) {
   var obj, user_type, other_type, tic_obj, ws, SERVER_SOCKET;
 
+  function relativeSocket(relUrl) {
+    return "ws://" + window.location.host + "/" + relUrl;
+  }
+
   obj = {};
+  SERVER_SOCKET = relativeSocket("socket");
   tic_obj = new TicTacToeGame();
-  SERVER_SOCKET = "ws://localhost:8888/socket";
   ws = new WebSocket(SERVER_SOCKET);
+
 
   obj.onmessage = function(stream) {
     console.log(stream.data);
@@ -497,6 +502,7 @@ function RemotePlayController(view) {
   }
 
   obj.onexit = function() {
+    view.clickDisable();
     alert("Another player exit from game");
   }
 
@@ -585,3 +591,16 @@ function RemotePlayController(view) {
       //}, false)
   //}, false)
 //})();
+//
+// Start remote game
+(function() {
+  window.addEventListener("load", function() {
+    var view, control;
+    view = new TicView(document.getElementById("game"));
+    control = RemotePlayController(view);
+    document.querySelector("section.game-controls > button").
+      addEventListener("click", function() {
+        control.joinany();
+      }, false)
+  }, false)
+})();
