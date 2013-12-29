@@ -73,7 +73,7 @@ class Room(object):
     @classmethod
     def another_user(cls, user_type):
         if user_type == cls.X_USER:
-            return cls.O_USER 
+            return cls.O_USER
         elif user_type == cls.O_USER:
             return cls.X_USER
         else:
@@ -117,10 +117,10 @@ class GameService(object):
         else:
             con.on_roomjoined(room_id)
             if room.full:
-                self.waiting.remove(room_id) # For joinany
+                self.waiting.remove(room_id)  # for joinany
                 room.game_start()
             else:
-                self.waiting.add(room_id) # for joinany
+                self.waiting.add(room_id)  # for joinany
                 con.send_wait()
 
     def random_waiting(self):
@@ -132,7 +132,7 @@ class GameService(object):
 
     def join_any(self, con):
         room_id = self.random_waiting() if self.is_waiting else \
-                  self.random_room()
+            self.random_room()
 
         self.join_room(con, room_id)
 
@@ -164,7 +164,7 @@ class GameService(object):
 # type: move, x: x_cord, y: y_cord
 
 class MessageHandler(WebSocketHandler):
-    
+
     room_id = None
 
     def open(self):
@@ -191,7 +191,7 @@ class MessageHandler(WebSocketHandler):
     def on_roomexit(self):
         if self.room is not None:
             self.games.close_room(self, self.room_id)
-            
+
     def on_close(self):
         self.on_roomexit()
 
