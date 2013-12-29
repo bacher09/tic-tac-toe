@@ -44,7 +44,7 @@ class Room(object):
         for c in self.connections:
             c.write_message(message)
 
-    def comunicate(self, con):
+    def comunicate(self, con, message):
         for c in self.connections:
             if c != con:
                 c.write_message(message)
@@ -186,6 +186,7 @@ class MessageHandler(WebSocketHandler):
             if self.room is None:
                 # game not start
                 return
+            self.room.comunicate(self, message)
 
     def on_roomexit(self):
         if self.room is not None:
@@ -210,7 +211,7 @@ class MessageHandler(WebSocketHandler):
     def send_joined(self, room_id):
         self.write_message({"type": "joined", "id": room_id})
 
-    def send_end(self, con):
+    def send_end(self):
         self.write_message({"type": "end"})
 
     @property

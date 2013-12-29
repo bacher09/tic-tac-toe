@@ -447,99 +447,141 @@ function ComputerPlayController(view) {
   return obj;
 }
 
-function RemoteCanvasTicTacToe(room_id, dCanvas) {
-  var ws, SERVER_URL, player_type, is_wait, self;
+function RemotePlayController(view) {
+  var obj, user_type, other_type, tic_obj, ws, SERVER_SOCKET;
 
-  self = this;
-  player_type = 0;
-  is_wait = true;
-  SERVER_URL = "ws://localhost:8888/socket/";
+  obj = {};
+  tic_obj = new TicTacToeGame();
+  SERVER_SOCKET = "ws://localhost:8888/socket";
+  ws = new WebSocket(SERVER_SOCKET);
 
-  function buildUrl(room_id) {
-    return SERVER_URL + room_id;
-  }
-
-  // create web socket
-  ws = new WebSocket(buildUrl(room_id));
-  ws.onmessage = function(stream) {
+  obj.onmessage = function(stream) {
+    console.log(stream.data);
     var msg = JSON.parse(stream.data);
+    // TODO: Maybe validate message
     switch(msg.type) {
       case "full":
-        throw new RoomIsFull("Sory this game already started");
+        obj.onfull();
         break;
-      case "message":
-        // get chat message
+      case "joined":
+        obj.onjoined(msg.id);
         break;
-      case "newplayer":
-        // new player connected
+      case "wait":
+        obj.onwait();
+        break;
+      case "end":
+        obj.onexit();
         break;
       case "gamestart":
-        self.start(msg.val);
-        break;
-      case "playerexit":
-        self.stop();
+        obj.gamestart(msg.val);
         break;
       case "move":
-        self.receiveMove(msg.x, msg.y);
+        obj.onmove(msg.x, msg.y);
+        break;
+      default:
+        // maybe exception ?
         break;
     }
   }
-  // inherit CanvasTicTacToe
-  CanvasTicTacToe.call(this, dCanvas);
 
-  this.start = function(p) {
-    player_type = p;
-    if(p === 1) is_wait = false;
+  obj.onfull = function() {
+    alert("This room is full");
   }
 
-  this.otherPlayer = function() {
-    switch(player_type) {
-      case 1:
-        return 2;
-      case 2:
-        return 1;
-      default:
-        return 0;
+  obj.onjoined = function(room_id) {
+    window.location.hash = room_id;
+  }
+
+  obj.onwait = function() {
+    alert("Plase wait another player");
+  }
+
+  obj.onexit = function() {
+    alert("Another player exit from game");
+  }
+
+  obj.gamestart = function(val) {
+    user_type = val;
+    other_type = tic_obj.anotherUser(val);
+    if(user_type === TicTacToeGame.USER_O)
+      obj.wait_move();
+    else
+      obj.wait_click();
+    // notify user
+    alert("Game start");
+  }
+
+  obj.reset = function() {
+    view.reinit();
+    tic_obj.reset();
+  }
+
+  obj.onmove = function(x, y) {
+    obj.makeMove(other_type, x, y);
+  }
+
+  obj.joinany = function() {
+    obj.reset();
+    ws.send(JSON.stringify({type: "joinany"}));
+  }
+
+  obj.join_to = function(room_id) {
+    obj.reset();
+    ws.send(JSON.stringify({type: "joinroom", id: room_id}));
+  }
+
+  obj.send_move = function(who, x, y){
+    ws.send(JSON.stringify({type: "move", x: x, y: y}));
+  }
+
+  obj.makeMove = function(who, x, y){
+    tic_obj.move(who, x, y, function(who, x, y){
+      view.drawMove(who, x, y)
+      if(who === user_type) {
+        obj.wait_move();
+        obj.send_move(who, x, y);
+      } else {
+        obj.wait_click();
       }
-  }
-
-  this.receiveMove = function(x, y) {
-    this.move(self.otherPlayer(), x, y, function() {
-      is_wait = false;
+    }, function(wins) {
+      view.clickDisable();
+      view.drawWinner(wins);
     });
   }
 
-  this.userMove = function(x, y) {
-    this.move(player_type, x, y, function() {
-      ws.send(JSON.stringify({type: "move", x: x, y: y}));
-      is_wait = true;
-    });
+  obj.wait_move = function() {
+    view.clickDisable();
   }
 
-  this.stop = function() {
-    is_wait = true;
+  obj.wait_click = function() {
+    view.clickEnable();
   }
 
-  this.paused = function() {
-    return (player_type == 0) || this.gameIsEnd() || is_wait;
+  obj.clickHandler = function(x, y) {
+    if(!tic_obj.freeCell(x, y)) return;
+    obj.makeMove(user_type, x, y);
+    if(!tic_obj.gameIsEnd()) view.clickDisable();
   }
 
-  this.click = function(x, y) {
-    self.userMove(x, y);
-  }
+  ws.onmessage = obj.onmessage;
+  obj.ws = ws;
+  view.onclick = obj.clickHandler;
+
+  return obj;
 }
 
+
 // base start game
-(function() {
-  console.log("Add");
-  window.addEventListener("load", function() {
-    var view, control;
-    console.log("Second");
-    view = new TicView(document.getElementById("game"));
-    control = ComputerPlayController(view);
-    document.querySelector("section.game-controls > button").
-      addEventListener("click", function() {
-        control.restart();
-      }, false)
-  }, false)
-})();
+//(function() {
+  //console.log("Add");
+  //window.addEventListener("load", function() {
+    //var view, control;
+    //console.log("Second");
+    //view = new TicView(document.getElementById("game"));
+    //control = ComputerPlayController(view);
+    //document.querySelector("section.game-controls > button").
+      //addEventListener("click", function() {
+        //control.restart();
+      //}, false)
+  //}, false)
+//})();
