@@ -13,7 +13,6 @@ define("port", default=8888, help="run on the given port", type=int)
 define("debug", default=False, help="set tornado to debug mode", type=bool)
 ROOT_PATH = os.path.dirname(__file__)
 MESSAGES_SCHEMA = {
-    "id": "#message",
     "$schema": "http://json-schema.org/draft-04/schema#",
     "title": "Messages schema",
     "type": "object",
@@ -190,7 +189,7 @@ class GameService(object):
 
     def random_room(self):
         import sys
-        return random.randrange(1, sys.maxint)
+        return random.randrange(1, sys.maxsize)
 
     def join_any(self, con):
         room_id = self.random_waiting() if self.is_waiting else \
